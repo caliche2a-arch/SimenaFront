@@ -479,7 +479,7 @@ const Dashboard = ({ token, user, setUser }) => {
           </div>
         </motion.div>
       ) : (
-        <PromptCorrection />
+        <PromptCorrection user={user} />
       )}
     </div>
   );
@@ -537,19 +537,48 @@ const FAQ = () => {
   );
 };
 
-const PromptCorrection = () => {
+const INTENT_OPTIONS = [
+  { value: 'auto', label: '🤖 Detectar automáticamente' },
+  { value: 'planeacion', label: '📚 Plan de clase' },
+  { value: 'examen', label: '📝 Examen / Prueba' },
+  { value: 'rubrica', label: '📊 Rúbrica de evaluación' },
+  { value: 'tarea_o_guia', label: '📋 Guía / Taller' },
+  { value: 'comunicacion', label: '✉️ Carta / Comunicado' },
+  { value: 'convivencia', label: '🤝 Convivencia / Conflicto' },
+  { value: 'reunion', label: '🕐 Reunión escolar' },
+  { value: 'proyecto', label: '🎯 Proyecto pedagógico' },
+  { value: 'explicacion', label: '💡 Explicación de concepto' },
+  { value: 'inclusion', label: '♿ Inclusión / NEE' },
+];
+
+const EXAMPLES = [
+  { bad: 'hazme una clase', good: 'Quiero planear una clase de fracciones para cuarto de primaria, duración 45 minutos' },
+  { bad: 'un examen de ciencias', good: 'Diseña un examen de ciencias naturales para quinto grado con 10 preguntas de selección múltiple' },
+  { bad: 'carta para padres', good: 'Necesito una carta formal para citar a los padres de un estudiante por bajo rendimiento en matemáticas' },
+];
+
+const PromptCorrection = ({ user }) => {
   const [input, setInput] = useState('');
+  const [manualIntent, setManualIntent] = useState('auto');
   const [result, setResult] = useState(null);
   const [isCorrecting, setIsCorrecting] = useState(false);
   const [error, setError] = useState('');
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = (text) => {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   const handleCorrect = async () => {
     if (!input.trim()) return;
     setIsCorrecting(true);
     setError('');
+    setResult(null);
     
     try {
-      const data = await promptService.review(input);
+      const data = await promptService.review(input, manualIntent);
       setResult(data);
     } catch (err) {
       setError(err.response?.data?.error || 'Error al corregir el prompt.');
@@ -562,74 +591,156 @@ const PromptCorrection = () => {
     <motion.div 
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="max-w-4xl mx-auto"
+      className="max-w-5xl mx-auto space-y-8"
     >
+      {/* Ejemplos antes/después */}
       <div className="glass-card">
-        <h2 className="text-3xl font-bold mb-6 flex items-center gap-3">
-          <Wand2 className="text-primary" /> Corrección de Prompts
+        <h2 className="text-3xl font-bold mb-2 flex items-center gap-3">
+          <Wand2 className="text-primary" /> Mejorador de Prompts
         </h2>
-        <p className="text-text-muted mb-8">
-          Escribe tu idea o prompt inicial abajo y nosotros lo optimizaremos para obtener los mejores resultados con la IA.
+        <p className="text-text-muted mb-6">
+          Escribe tu idea y la transformaremos en un prompt profesional. Cuantos más detalles des, mejor será el resultado.
         </p>
-        
-        <div className="space-y-6">
-          <div>
-            <label className="block text-sm font-bold mb-2 text-text-muted uppercase tracking-wider">Tu Prompt Original</label>
-            <textarea 
-              placeholder="Ej: Hazme una clase de fraccionarios..."
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-            />
+
+        <div className="mb-2">
+          <p className="text-xs font-bold text-text-muted uppercase tracking-wider mb-3">💡 Ejemplos — antes y después</p>
+          <div className="grid md:grid-cols-3 gap-3">
+            {EXAMPLES.map((ex, i) => (
+              <div key={i} className="bg-background/40 border border-glass-border rounded-xl p-3 text-xs space-y-2">
+                <div className="flex items-start gap-2">
+                  <span className="text-error font-bold shrink-0">✗</span>
+                  <span className="text-text-muted italic">"{ex.bad}"</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="text-success font-bold shrink-0">✓</span>
+                  <span className="text-text">"{ex.good}"</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Formulario */}
+      <div className="glass-card space-y-5">
+        {/* Selector de categoría */}
+        <div>
+          <label className="block text-sm font-bold mb-2 text-text-muted uppercase tracking-wider">
+            ¿Qué tipo de recurso necesitas? (opcional)
+          </label>
+          <select
+            value={manualIntent}
+            onChange={(e) => setManualIntent(e.target.value)}
+            className="w-full bg-background/50 border border-glass-border rounded-xl p-3 text-text focus:outline-none focus:border-primary transition-colors"
+          >
+            {INTENT_OPTIONS.map(opt => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+          <p className="text-xs text-text-muted mt-1">Si no estás seguro, déjalo en "Detectar automáticamente".</p>
+        </div>
+
+        {/* Textarea */}
+        <div>
+          <label className="block text-sm font-bold mb-2 text-text-muted uppercase tracking-wider">
+            Describe lo que necesitas
+          </label>
+          <textarea 
+            placeholder="Ej: Quiero una clase de fracciones para cuarto de primaria. La duración es de 45 minutos..."
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            rows={5}
+          />
+          <p className="text-xs text-text-muted mt-1">
+            Tip: menciona el grado, la materia y el objetivo. Cuanto más detallado, mejor el resultado.
+          </p>
+        </div>
+
+        <button 
+          onClick={handleCorrect}
+          disabled={isCorrecting || !input.trim()}
+          className="btn-primary w-full py-4 flex items-center justify-center gap-2 disabled:opacity-50"
+        >
+          {isCorrecting ? (
+            <><Sparkles size={20} className="animate-spin" /> Analizando con IA...</>
+          ) : (
+            <><Wand2 size={20} /> Mejorar Mi Prompt</>
+          )}
+        </button>
+
+        {error && <p className="text-error text-center">{error}</p>}
+      </div>
+
+      {/* Resultado */}
+      {result && (
+        <motion.div 
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="space-y-6"
+        >
+          {/* Badge de intención detectada */}
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-text-muted">Categoría detectada:</span>
+            <span className="px-3 py-1 rounded-full text-sm font-bold bg-primary/20 text-primary border border-primary/30">
+              {result.detectedIntentLabel || 'Solicitud General'}
+            </span>
           </div>
 
-          <button 
-            onClick={handleCorrect}
-            disabled={isCorrecting || !input.trim()}
-            className="btn-primary w-full py-4 flex items-center justify-center gap-2 disabled:opacity-50"
-          >
-            {isCorrecting ? (
-              <>Analizando con IA...</>
-            ) : (
-              <>
-                <Sparkles size={20} /> Mejorar Mi Prompt
-              </>
-            )}
-          </button>
-
-          {error && <p className="text-error text-center mt-4">{error}</p>}
-
-          {result && (
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="mt-10 p-6 bg-primary/5 border border-primary/20 rounded-2xl"
-            >
-              <h4 className="font-bold mb-4 text-secondary flex items-center gap-2">
-                <Wand2 size={18} /> Análisis y Consejos
+          <div className="grid md:grid-cols-2 gap-6">
+            {/* Consejos */}
+            <div className="glass-card bg-secondary/5 border-secondary/20">
+              <h4 className="font-bold mb-4 text-secondary flex items-center gap-2 text-lg">
+                <Sparkles size={18} /> Consejos para tu prompt
               </h4>
-              <div className="bg-background/50 p-4 rounded-xl border border-glass-border mb-6">
-                <p className="whitespace-pre-wrap text-sm leading-relaxed">{result.advice}</p>
+              <div className="space-y-3">
+                {result.advice.split('\n').filter(l => l.trim()).map((line, i) => (
+                  <p key={i} className="text-sm leading-relaxed text-text-muted">{line}</p>
+                ))}
               </div>
+            </div>
 
-              <h4 className="font-bold mb-4 text-primary flex items-center gap-2">
-                <CheckCircle size={18} /> Prompt Mejorado
+            {/* Prompt mejorado */}
+            <div className="glass-card bg-primary/5 border-primary/20">
+              <h4 className="font-bold mb-4 text-primary flex items-center gap-2 text-lg">
+                <CheckCircle size={18} /> Tu Prompt Mejorado
               </h4>
-              <div className="bg-background/50 p-4 rounded-xl border border-glass-border">
+              <div className="bg-background/50 p-4 rounded-xl border border-glass-border mb-4">
                 <p className="whitespace-pre-wrap text-sm leading-relaxed">{result.improvedPrompt}</p>
               </div>
               <button 
-                onClick={() => navigator.clipboard.writeText(result.improvedPrompt)}
-                className="mt-4 text-sm text-primary underline font-bold"
+                onClick={() => handleCopy(result.improvedPrompt)}
+                className={`btn-primary w-full py-3 flex items-center justify-center gap-2 transition-all ${copied ? 'bg-success/80' : ''}`}
               >
-                Copiar prompt mejorado
+                {copied ? (
+                  <><CheckCircle size={18} /> ¡Copiado al portapapeles!</>
+                ) : (
+                  <><Sparkles size={18} /> Copiar Prompt Mejorado</>
+                )}
               </button>
-            </motion.div>
-          )}
-        </div>
-      </div>
+              {user?.pago && (
+                <div className="flex gap-2 mt-3">
+                  <button
+                    onClick={() => { handleCopy(result.improvedPrompt); window.open('https://gemini.google.com/app?hl=es', '_blank'); }}
+                    className="glass-card !py-2 !px-4 !rounded-xl flex items-center gap-2 flex-1 justify-center border-primary/30 hover:border-primary transition-all text-sm"
+                  >
+                    <Sparkles size={14} className="text-primary" /> Pegar en Gemini
+                  </button>
+                  <button
+                    onClick={() => { handleCopy(result.improvedPrompt); window.open('https://chatgpt.com/', '_blank'); }}
+                    className="glass-card !py-2 !px-4 !rounded-xl flex items-center gap-2 flex-1 justify-center border-secondary/30 hover:border-secondary transition-all text-sm"
+                  >
+                    <Sparkles size={14} className="text-secondary" /> Pegar en ChatGPT
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </motion.div>
+      )}
     </motion.div>
   );
 };
+
 
 
 const Footer = () => (

@@ -35,8 +35,8 @@ export const promptService = {
     const { data } = await api.get(`/prompts/content/${id}`);
     return data;
   },
-  review: async (promptText) => {
-    const { data } = await api.post('/prompts/review', { promptText });
+  review: async (promptText, manualIntent = 'auto') => {
+    const { data } = await api.post('/prompts/review', { promptText, manualIntent });
     return data;
   }
 };
